@@ -1,1 +1,6 @@
-name = Inline entity display
+name = Inline Entity Display
+description = Provides a settings for entity reference fields, to display the referenced entities fields into the content array of the parent entity and on the manage display settings.
+core = 7.x
+package = Fields
+dependencies[] = entity
+dependencies[] = ctools
