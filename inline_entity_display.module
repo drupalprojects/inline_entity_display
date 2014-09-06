@@ -1,6 +1,5 @@
 <?php
 
-
 /**
  * Implements hook_field_extra_fields().
  *
@@ -80,10 +79,8 @@ function inline_entity_display_field_extra_fields() {
 
             );
             if ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED) {
-
                 $extra_field['label'] = t('Referenced @type_label from @field_label: All: @bundle: @label', array('@label' => $target_entity_extra_property['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@bundle' => $entity_target_allowed_bundle));
                 $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$entity_target_allowed_bundle.':all' . ':' . $target_entity_property_name] = $extra_field;
-
             }
             elseif ($field['cardinality'] > 1) {
               foreach (range(0, $field['cardinality'] - 1) as $delta) {
@@ -181,11 +178,11 @@ function inline_entity_display_field_extra_fields_display_alter(&$displays, $con
     return;
   }
 
-  foreach ($extra_fields[$context['entity_type']][$context['bundle']] as $key => $value) {
-    foreach ($value as $extra_field_name => $extra_field) {
+  foreach ($extra_fields[$context['entity_type']][$context['bundle']] as $key => $values) {
+    foreach (array_keys($values) as $extra_field_name) {
       // If the current extra field is represented in the $displays array...
       if (!empty($displays[$extra_field_name])) {
-        // And no data yet exists for the extra field in the bundle settings...
+        // And no data yet exists for the extra field in the bundle settings.
         if (empty($bundle_settings['extra_fields']['display'][$extra_field_name]) ||
           (empty($bundle_settings['view_modes'][$context['view_mode']]['custom_settings']) && empty($bundle_settings['extra_fields']['display'][$extra_field_name]['default'])) ||
           (!empty($bundle_settings['view_modes'][$context['view_mode']]['custom_settings']) && empty($bundle_settings['extra_fields']['display'][$extra_field_name][$context['view_mode']]))) {
@@ -235,8 +232,17 @@ function inline_entity_display_form_field_ui_display_overview_form_alter(&$form,
       }
       if (isset($field['property_name'])) {
         $form['fields'][$field_name]['format']['type']['#description'] = t('This property is provided by IED for referenced entity. (there is no label).');
+
+        if (empty($bundle_settings['extra_fields']['display'][$field_name]) ||
+          (empty($bundle_settings['view_modes'][$view_mode]['custom_settings']) && empty($bundle_settings['extra_fields']['display'][$field_name]['default'])) ||
+          (!empty($bundle_settings['view_modes'][$view_mode]['custom_settings']) && empty($bundle_settings['extra_fields']['display'][$field_name][$view_mode]))) {
+          // Default it to be hidden.
+          $form['fields'][$field_name]['format']['type']['#default_value'] = 'hidden';
+        }
+
         continue;
       }
+
       // If the extra field has configurable settings, add a help text for it.
       if (!empty($field['configurable'])) {
         $form['fields'][$field_name]['format']['type']['#description'] = t('Modify the settings for this field on the <a href="!url">@referenced-entity-type @bundle "manage display" configuration</a>.', array('!url' => url($path_to_bundle . '/display'), '@referenced-entity-type' => $infos[$field_entity_type]['label'], '@bundle' => $field_bundle));
@@ -363,13 +369,11 @@ function inline_entity_display_entity_view($entity, $entity_type, $view_mode, $l
       }
 
       // If we found values:
-      if ((!empty($referenced_entity) || !empty($referenced_entities))) {
-        if (!empty($referenced_entity)) {
-        	inline_entity_form_entity_process_referenced_extra_field($entity, $entity_type, $view_mode, $langcode, $wrapper, $field, $instance, $referenced_entity);
-        }
-        else {
-        	inline_entity_form_entity_process_referenced_extra_field_multiple($entity, $entity_type, $view_mode, $langcode, $wrapper, $field, $instance, $referenced_entities);
-        }
+      if (!empty($referenced_entity)) {
+        ied_entity_process_referenced_extra_field($entity, $entity_type, $view_mode, $langcode, $field, $referenced_entity);
+      }
+      else if (!empty($referenced_entities)) {
+      	ied_entity_process_referenced_extra_field_multiple($entity, $entity_type, $view_mode, $langcode, $field, $referenced_entities);
       }
     }
   }
@@ -388,16 +392,12 @@ function inline_entity_display_entity_view($entity, $entity_type, $view_mode, $l
  *   The view mode used to render $entity.
  * @param string $langcode
  *   The lang code used to render $entity.
- * @param EntityMetaDataWrapper $wrapper
- *   The wrapper loaded for the $entity.
  * @param array $field
  *   The IED enabled field of $entity that contain the referenced Entities.
- * @param array $instance
- *   The instance of the $field for the $entity bundle.
  * @param array $referenced_entities
  *   The referenced entities that's going to be processed field by field and added to the being rendered $entity->content array.
  */
-function inline_entity_form_entity_process_referenced_extra_field_multiple($entity, $entity_type, $view_mode, $langcode, $wrapper, $field, $instance, $referenced_entities) {
+function ied_entity_process_referenced_extra_field_multiple($entity, $entity_type, $view_mode, $langcode, $field, $referenced_entities) {
   list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
   $referenced_entity_type = $field['settings']['target_type'];
   foreach ($referenced_entities as $delta => $referenced_entity) {
@@ -441,40 +441,98 @@ function inline_entity_form_entity_process_referenced_extra_field_multiple($enti
       $display = field_extra_fields_get_display($entity_type, $bundle, $reference_view_mode);
 
       // Only include fields that are visible on the current view mode.
-      if (!empty($display[$referenced_entity_extra_field_name]['visible'])) {
-        // Add the referenced entity extra field to the entity's content array.
-        $content_key = $referenced_entity_extra_field_name;
+      if (empty($display[$referenced_entity_extra_field_name]['visible'])) {
+        continue;
+      }
 
-        // Group unlimited valued field and limited valued field differently.
-        if ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED) {
-          // Get the property or the field and add it to the render array.
-          if (!empty($referenced_entity_extra_field['property_name']) && isset($referenced_entity->{$referenced_entity_extra_field['property_name']})) {
-            $entity->content[$content_key][$delta][$referenced_entity_extra_field['property_name']] = array(
-              '#prefix' => '<p class="ied-extra-field ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name']. '">',
-              '#markup' => $referenced_entity->{$referenced_entity_extra_field['property_name']},
-              '#suffix' => '</p>',
-            );
-          }
-          elseif (!empty($referenced_entity_extra_field['field_name'])) {
-          	$entity->content[$content_key][$delta][$referenced_entity_extra_field['field_name']] = field_view_field($referenced_entity_extra_field['entity_type'], $referenced_entity, $referenced_entity_extra_field['field_name'], $reference_view_mode, $langcode);
-          }
+      // Add the referenced entity extra field to the entity's content array.
+      $content_key = $referenced_entity_extra_field_name;
+
+      // Group unlimited valued field and limited valued field differently.
+      if ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED) {
+        // Get the property or the field and add it to the render array.
+        if (!empty($referenced_entity_extra_field['property_name']) && isset($referenced_entity->{$referenced_entity_extra_field['property_name']})) {
+          $prop_attributes = array(
+            'class' => array(
+              'ied-extra-field',
+              'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name']
+            ),
+      	    'data-ied-entity' => $referenced_entity_id,
+      	    'data-ied-entity-type' => $referenced_entity_type,
+      	    'data-ied-entity-delta' => $delta,
+      	    'data-ied-prop-name' => $referenced_entity_extra_field['property_name'],
+      	    'data-ied-parent-field-name' => $field['field_name'],
+        	);
+          $entity->content[$content_key][$delta][$referenced_entity_extra_field['property_name']] = array(
+            '#type' => 'container',
+            'content' => array(
+              '#markup' => '<p class="ied-extra-field ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name']. '">'
+                         . $referenced_entity->{$referenced_entity_extra_field['property_name']}
+                         . '</p>',
+              ),
+            '#attributes' => $prop_attributes,
+          );
         }
-        else {
-          if ($delta != $referenced_entity_extra_field['delta']) {
-          	continue;
-          }
-          // Get the property or the field and add it to the render array.
-          if (!empty($referenced_entity_extra_field['property_name']) && isset($referenced_entity->{$referenced_entity_extra_field['property_name']})) {
-            $entity->content[$content_key] = array(
-              '#prefix' => '<p class="ied-extra-field ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name']. '">',
-              '#markup' => $referenced_entity->{$referenced_entity_extra_field['property_name']},
-              '#suffix' => '</p>',
-            );
-          }
-          elseif (!empty($referenced_entity_extra_field['field_name'])) {
-          	$entity->content[$content_key] = field_view_field($referenced_entity_extra_field['entity_type'], $referenced_entity, $referenced_entity_extra_field['field_name'], $reference_view_mode, $langcode);
-          }
-
+        elseif (!empty($referenced_entity_extra_field['field_name'])) {
+        	$entity->content[$content_key][$delta][$referenced_entity_extra_field['field_name']] = field_view_field($referenced_entity_extra_field['entity_type'], $referenced_entity, $referenced_entity_extra_field['field_name'], $reference_view_mode, $langcode);
+        	$entity->content[$content_key][$delta][$referenced_entity_extra_field['field_name']] += array(
+        	  '#ied_attributes' => array(
+        	    'data-ied-entity' => $referenced_entity_id,
+        	    'data-ied-entity-type' => $referenced_entity_type,
+        	    'data-ied-entity-delta' => $delta,
+        	    'data-ied-field-name' => $referenced_entity_extra_field['field_name'],
+        	    'data-ied-parent-field-name' => $field['field_name'],
+        	  ),
+        	  '#ied_classes' => array(
+              'ied-extra-field',
+              'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['field_name']
+        	  ),
+        	);
+        }
+      }
+      else {
+        if ($delta != $referenced_entity_extra_field['delta']) {
+        	continue;
+        }
+        // Get the property or the field and add it to the render array.
+        if (!empty($referenced_entity_extra_field['property_name']) && isset($referenced_entity->{$referenced_entity_extra_field['property_name']})) {
+          $prop_attributes = array(
+            'class' => array(
+              'ied-extra-field',
+              'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name']
+            ),
+      	    'data-ied-entity' => $referenced_entity_id,
+      	    'data-ied-entity-type' => $referenced_entity_type,
+      	    'data-ied-entity-delta' => $delta,
+      	    'data-ied-prop-name' => $referenced_entity_extra_field['property_name'],
+      	    'data-ied-parent-field-name' => $field['field_name'],
+        	);
+          $entity->content[$content_key] = array(
+            '#type' => 'container',
+            'content' => array(
+              '#markup' => '<p class="ied-extra-field ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name']. '">'
+                         . $referenced_entity->{$referenced_entity_extra_field['property_name']}
+                         . '</p>',
+              ),
+            '#attributes' => $prop_attributes,
+          );
+        }
+        elseif (!empty($referenced_entity_extra_field['field_name'])) {
+          // Content key is {$target_type:$entity_target_allowed_bundle:$delta:$target_field_name}.
+        	$entity->content[$content_key] = field_view_field($referenced_entity_extra_field['entity_type'], $referenced_entity, $referenced_entity_extra_field['field_name'], $reference_view_mode, $langcode);
+        	$entity->content[$content_key] += array(
+        	  '#ied_attributes' => array(
+        	    'data-ied-entity' => $referenced_entity_id,
+        	    'data-ied-entity-type' => $referenced_entity_type,
+        	    'data-ied-entity-delta' => $delta,
+        	    'data-ied-field-name' => $referenced_entity_extra_field['field_name'],
+        	    'data-ied-parent-field-name' => $field['field_name'],
+        	  ),
+        	  '#ied_classes' => array(
+              'ied-extra-field',
+              'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['field_name']
+        	  ),
+        	);
         }
       }
     }
@@ -494,16 +552,12 @@ function inline_entity_form_entity_process_referenced_extra_field_multiple($enti
  *   The view mode used to render $entity.
  * @param string $langcode
  *   The lang code used to render $entity.
- * @param EntityMetaDataWrapper $wrapper
- *   The wrapper loaded for the $entity.
  * @param array $field
  *   The IED enabled field of $entity that contain the single valued referenced Entity.
- * @param array $instance
- *   The instance of the $field for the $entity bundle.
  * @param Entity $referenced_entity
  *   The referenced entity that's going to be processed field by field and added to the being rendered $entity->content array.
  */
-function inline_entity_form_entity_process_referenced_extra_field($entity, $entity_type, $view_mode, $langcode, $wrapper, $field, $instance, $referenced_entity) {
+function ied_entity_process_referenced_extra_field($entity, $entity_type, $view_mode, $langcode, $field, $referenced_entity) {
   list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
   $referenced_entity_type = $field['settings']['target_type'];
   list($referenced_entity_id,
@@ -547,24 +601,73 @@ function inline_entity_form_entity_process_referenced_extra_field($entity, $enti
     $display = field_extra_fields_get_display($entity_type, $bundle, $reference_view_mode);
 
     // Only include fields that are visible on the current view mode.
-    if (!empty($display[$referenced_entity_extra_field_name]['visible'])) {
-      // Add the referenced entity extra field to the entity's content array.
-      $content_key = $referenced_entity_extra_field_name;
-
-      // Get the property or the field and add it to the render array.
-      if (!empty($referenced_entity_extra_field['property_name']) &&
-          isset($referenced_entity->{$referenced_entity_extra_field['property_name']})) {
-        $entity->content[$content_key] = array(
-          '#prefix' => '<p class="ied-extra-field ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name']. '">',
-          '#markup' => $referenced_entity->{$referenced_entity_extra_field['property_name']},
-          '#suffix' => '</p>',
-        );
-      }
-      elseif (!empty($referenced_entity_extra_field['field_name'])) {
-      	$entity->content[$content_key] = field_view_field($referenced_entity_extra_field['entity_type'], $referenced_entity, $referenced_entity_extra_field['field_name'], $reference_view_mode, $langcode);
-      }
+    if (empty($display[$referenced_entity_extra_field_name]['visible'])) {
+      continue;
     }
+
+    // Add the referenced entity extra field to the entity's content array.
+    $content_key = $referenced_entity_extra_field_name;
+
+    // Get the property or the field and add it to the render array.
+    if (!empty($referenced_entity_extra_field['property_name']) &&
+        isset($referenced_entity->{$referenced_entity_extra_field['property_name']})) {
+      $prop_attributes = array(
+        'class' => array(
+          'ied-extra-field',
+          'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name']
+        ),
+  	    'data-ied-entity' => $referenced_entity_id,
+  	    'data-ied-entity-type' => $referenced_entity_type,
+  	    'data-ied-entity-delta' => 0,
+  	    'data-ied-prop-name' => $referenced_entity_extra_field['property_name'],
+  	    'data-ied-parent-field-name' => $field['field_name'],
+    	);
+      $entity->content[$content_key] = array(
+        '#type' => 'container',
+        'content' => array(
+          '#markup' => '<p class="ied-extra-field ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name']. '">'
+                     . $referenced_entity->{$referenced_entity_extra_field['property_name']}
+                     . '</p>',
+          ),
+        '#attributes' => $prop_attributes,
+      );
+    }
+    elseif (!empty($referenced_entity_extra_field['field_name'])) {
+    	$entity->content[$content_key] = field_view_field($referenced_entity_extra_field['entity_type'], $referenced_entity, $referenced_entity_extra_field['field_name'], $reference_view_mode, $langcode);
+    	$entity->content[$content_key] += array(
+    	  '#ied_attributes' => array(
+    	    'data-ied-entity' => $referenced_entity_id,
+    	    'data-ied-entity-type' => $referenced_entity_type,
+    	    'data-ied-entity-delta' => 0,
+    	    'data-ied-field-name' => $referenced_entity_extra_field['field_name'],
+    	    'data-ied-parent-field-name' => $field['field_name'],
+    	  ),
+    	  '#ied_classes' => array(
+          'ied-extra-field',
+          'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['field_name']
+    	  ),
+    	);
+    }
+
   }
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ *
+ * Add the ied_attributes and classes on the fields.
+ */
+function inline_entity_display_preprocess_field(&$variables) {
+	if (!empty($variables['element']) && !empty($variables['element']['#ied_attributes'])) {
+		if (empty($variables['attributes_array'])) {
+			$variables['attributes_array'] = array();
+		}
+		$variables['attributes_array'] += $variables['element']['#ied_attributes'];
+		if (empty($variables['classes_array'])) {
+			$variables['classes_array'] = array();
+		}
+		$variables['classes_array'] += $variables['element']['#ied_classes'];
+	}
 }
 
 /**
@@ -626,7 +729,6 @@ function inline_entity_display_entity_info_alter(&$entity_info) {
     $target_type = $field_data['settings']['target_type'];
     if (!empty($entity_info[$entity_type]['view modes'])) {
       foreach ($entity_info[$entity_type]['view modes'] as $view_mode => $view_mode_info) {
-
         $entity_info[$target_type]['view modes'][$entity_type . '_' . $view_mode] = array(
           'label' => t('@entity_type: @view_mode', array('@entity_type' => $entity_info[$entity_type]['label'], '@view_mode' => $view_mode_info['label'])),
 
