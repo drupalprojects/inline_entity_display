@@ -4,3 +4,8 @@ core = 7.x
 package = Fields
 dependencies[] = entity
 dependencies[] = ctools
+
+simplytest_dependencies[] = entityreference
+simplytest_dependencies[] = devel
+simplytest_dependencies[] = devel_generate
+simplytest_dependencies[] = fieldgroup
