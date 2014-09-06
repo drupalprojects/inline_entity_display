@@ -56,7 +56,7 @@ function inline_entity_display_field_extra_fields() {
           $disabled = FALSE;
           $properties_name = array();
           foreach ($properties[$target_type] as $target_entity_property_name => $target_entity_extra_property) {
-            if ((empty($target_entity_extra_property['type']) && $target_entity_property_name != 'title') ||
+            if ((empty($target_entity_extra_property['type']) && !in_array($target_entity_property_name, array('title',' name'))) ||
                 (!empty($target_entity_extra_property['type']) && $target_entity_extra_property['type'] != 'text') ||
                 (!empty($target_entity_extra_property['field']) && $target_entity_extra_property['field'] == TRUE)) {
             	continue;
@@ -352,6 +352,9 @@ function inline_entity_display_entity_view($entity, $entity_type, $view_mode, $l
     if (empty($instances)) {
       $instances = field_info_instances($entity_type, $bundle);
     }
+
+    $referenced_entities = array();
+    $referenced_entity = NULL;
 
     if (isset($instances[$field_name]) &&
         isset($instances[$field_name]['ied_settings']) &&
