@@ -298,7 +298,7 @@ function inline_entity_display_form_field_ui_field_edit_form_alter(&$form, &$for
   $instance = $form['#instance'];
 
   // If the field is of type entityreference:
-  if (in_array($form['#field']['module'], array('entityreference', 'field_collection'))) {
+  if (in_array($form['#field']['module'], inline_entity_display_get_compatible_field_types())) {
     // Get the current instance's attribute settings for use as default values.
     $ied_settings = inline_entity_display_field_instance_attribute_settings($instance);
 
