@@ -31,7 +31,7 @@ function inline_entity_display_field_extra_fields() {
 }
 
 /**
- * This function populate the extra fields of an entity reference field instance on a given entity type bundle.
+ * This function populate the extra fields of a bundle with the referenced entities fieds and text properties.
  *
  * @param $extra
  *   The extra array to populate with extra fields that contains the extra fields.
