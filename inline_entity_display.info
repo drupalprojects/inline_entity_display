@@ -6,6 +6,9 @@ dependencies[] = entity
 dependencies[] = ctools
 
 simplytest_dependencies[] = entityreference
+simplytest_dependencies[] = field_collection
 simplytest_dependencies[] = devel
 simplytest_dependencies[] = devel_generate
 simplytest_dependencies[] = fieldgroup
+simplytest_dependencies[] = ds
+simplytest_dependencies[] = ds_ui
