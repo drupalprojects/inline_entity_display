@@ -16,140 +16,161 @@ function inline_entity_display_field_extra_fields() {
 
   // Loop through the product reference fields.
   foreach ($fields as $field_name => $field) {
-
     foreach ($field['bundles'] as $entity_type => $bundles) {
-
       foreach ($bundles as $bundle_name) {
         // Get the instance settings for the field on this entity bundle.
         $instance_settings = field_info_instance($entity_type, $field['field_name'], $bundle_name);
+        // Add the extra fields of an entity reference field instance on a given entity type bundle.
+        _ied_entity_bundle_referencefield_extra_fields($extra, $properties, $infos, $entity_type, $bundle_name, $field, $instance_settings);
 
-        // If display_fields is turned off for this instance, skip adding the
-        // extra fields to this bundle's view modes.
-        if (empty($instance_settings['ied_settings']['display_fields'])) {
-          continue;
-        }
-
-        $extra_fields = array();
-        $target_type = inline_entity_display_get_field_target_type($field);
-
-        // Get entity info.
-        if (empty($infos[$target_type])) {
-          $infos[$target_type] = entity_get_info($target_type);
-        }
-
-        // Get properties info.
-        if (empty($properties[$target_type])) {
-          $properties[$target_type] = entity_get_all_property_info($target_type);
-        }
-
-        // Build a list of entity bundles that may be referenced.
-        $entity_target_allowed_bundles = inline_entity_display_get_field_allowed_bundles($field, $infos[$target_type]);
-
-        // Retrieve the target entity type label
-        $target_entity_type_label = $infos[$target_type]['label'];
-
-        foreach ($entity_target_allowed_bundles as $entity_target_allowed_bundle) {
-          $configurable = TRUE;
-          $disabled = FALSE;
-          $properties_name = array();
-          foreach ($properties[$target_type] as $target_entity_property_name => $target_entity_extra_property) {
-            if ((empty($target_entity_extra_property['type']) && !in_array($target_entity_property_name, array('title', 'name'))) ||
-                (!empty($target_entity_extra_property['type']) && $target_entity_extra_property['type'] != 'text') ||
-                (!empty($target_entity_extra_property['field']) && $target_entity_extra_property['field'] == TRUE)) {
-            	continue;
-            }
-
-            $extra_field = array(
-            	'configurable' => TRUE,
-              'entity_type' => $target_type,
-              'bundle' => $entity_target_allowed_bundle,
-              'property_name' => $target_entity_property_name,
-              'property_label' => $target_entity_extra_property['label'],
-              'weight' => 0,
-              'parent_field_name' => $field['field_name'],
-            );
-
-            $extra_field['label'] = $target_entity_property_name;
-            $extra_field['display']['default'] = array(
-              'weight' => 0,
-              'visible' => FALSE,
-
-            );
-            if ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED) {
-                $extra_field['label'] = t('Referenced @type_label from @field_label: All: @bundle: @label', array('@label' => $target_entity_extra_property['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@bundle' => $entity_target_allowed_bundle));
-                $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$entity_target_allowed_bundle.':all' . ':' . $target_entity_property_name] = $extra_field;
-            }
-            elseif ($field['cardinality'] > 1) {
-              foreach (range(0, $field['cardinality'] - 1) as $delta) {
-                  $extra_field['delta'] = $delta;
-                  $extra_field['label'] = t('Referenced @type_label from @field_label: @delta: @bundle: @label', array('@label' => $target_entity_extra_property['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@delta' => $delta, '@bundle' => $entity_target_allowed_bundle));
-                  $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$entity_target_allowed_bundle . ':' . $delta . ':' . $target_entity_property_name] = $extra_field;
-              }
-            }
-            else {
-              $extra_field['label'] = t('Referenced @type_label from @field_label: @bundle: @label', array('@label' => $target_entity_extra_property['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@bundle' => $entity_target_allowed_bundle));
-              $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$entity_target_allowed_bundle . ':' . $target_entity_property_name] = $extra_field;
-            }
-          }
-
-          foreach (field_info_instances($target_type, $entity_target_allowed_bundle) as $target_field_name => $target_field) {
-            // Do not allow to display inline field when the field is an enable IED entityreference,
-            // and entity type and bundle referenced are the same of the parent entity type.
-            if ($target_field_name == $field['field_name'] &&
-                $target_type == $entity_type &&
-                in_array($bundle_name, $entity_target_allowed_bundles)) {
-              // Skip this field.
-            	continue;
-            }
-            if ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED) {
-              $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$entity_target_allowed_bundle.':all' . ':' . $target_field_name] = array(
-                'label' => t('Referenced @type_label from @field_label: All: @bundle: @label', array('@label' => $target_field['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@bundle' => $entity_target_allowed_bundle)),
-                'description' => t('Field from a referenced @type_label.', array('@type_label' => $target_entity_type_label)),
-                'weight' => $target_field['widget']['weight'],
-                'configurable' => $configurable,
-                'entity_type' => $target_type,
-                'bundle' => $entity_target_allowed_bundle,
-                'field_name' => $target_field_name,
-                'field_label' => $target_field['label'],
-                'parent_field_name' => $field['field_name'],
-              );
-            }
-            elseif ($field['cardinality'] > 1) {
-              foreach (range(0, $field['cardinality'] - 1) as $delta) {
-                	$extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$entity_target_allowed_bundle . ':' . $delta . ':' . $target_field_name] = array(
-                    'label' => t('Referenced @type_label from @field_label: @delta: @bundle: @label', array('@label' => $target_field['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@delta' => $delta, '@bundle' => $entity_target_allowed_bundle)),
-                    'description' => t('Field from a referenced @type_label.', array('@type_label' => $target_entity_type_label)),
-                    'weight' => $target_field['widget']['weight'],
-                    'configurable' => $configurable,
-                    'entity_type' => $target_type,
-                    'bundle' => $entity_target_allowed_bundle,
-                	  'field_name' => $target_field_name,
-                	  'field_label' => $target_field['label'],
-                	  'parent_field_name' => $field['field_name'],
-                	  'delta' => $delta,
-                	);
-              }
-            }
-            else {
-              $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$entity_target_allowed_bundle . ':' . $target_field_name] = array(
-                'label' => t('Referenced @type_label from @field_label: @bundle: @label', array('@label' => $target_field['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@bundle' => $entity_target_allowed_bundle)),
-                'description' => t('Field from a referenced @type_label.', array('@type_label' => $target_entity_type_label)),
-                'weight' => $target_field['widget']['weight'],
-                'configurable' => $configurable,
-                'entity_type' => $target_type,
-                'bundle' => $entity_target_allowed_bundle,
-                'field_name' => $target_field_name,
-                'field_label' => $target_field['label'],
-                'parent_field_name' => $field['field_name'],
-              );
-            }
-          }
-        }
       }
     }
   }
 
   return $extra;
+}
+
+/**
+ * This function populate the extra fields of an entity reference field instance on a given entity type bundle.
+ *
+ * @param $extra
+ *   The extra array to populate with extra fields that contains the extra fields.
+ * @param $properties
+ *   Used to store the referenced entity_type(s) properties on demand.
+ * @param $infos
+ *   Used to store the referenced entity_type(s) info on demand.
+ * @param $entity_type
+ *   The entity type that hold the extra fields.
+ * @param $bundle_name
+ *   The name of the bundle that hold the extra fields.
+ * @param $field
+ *   The field that reference the entities on the entity_type, bundle_name.
+ * @param $instance_settings
+ *   The field instance that reference the entities on the entity_type, bundle_name.
+ */
+function _ied_entity_bundle_referencefield_extra_fields(&$extra, &$properties, &$infos, $entity_type, $bundle_name, $field, $instance_settings) {
+  // If display_fields is turned off for this instance, skip adding the
+  // extra fields to this bundle's view modes.
+  if (empty($instance_settings['ied_settings']['display_fields'])) {
+    return;
+  }
+
+  // Get the entity type referenced by this field.
+  $target_type = inline_entity_display_get_field_target_type($field);
+
+  // Get entity info.
+  if (empty($infos[$target_type])) {
+    $infos[$target_type] = entity_get_info($target_type);
+  }
+
+  // Get properties info.
+  if (empty($properties[$target_type])) {
+    $properties[$target_type] = entity_get_all_property_info($target_type);
+  }
+
+  // Build a list of entity bundles that may be referenced.
+  $target_allowed_bundles = inline_entity_display_get_field_allowed_bundles($field, $infos[$target_type]);
+
+  // Retrieve the target entity type label
+  $target_entity_type_label = $infos[$target_type]['label'];
+
+  foreach ($target_allowed_bundles as $target_allowed_bundle) {
+    $configurable = TRUE;
+    $disabled = FALSE;
+    $properties_name = array();
+    foreach ($properties[$target_type] as $target_property_name => $target_extra_property) {
+      if ((empty($target_extra_property['type']) && !in_array($target_property_name, array('title', 'name'))) ||
+          (!empty($target_extra_property['type']) && $target_extra_property['type'] != 'text') ||
+          (!empty($target_extra_property['field']) && $target_extra_property['field'] == TRUE)) {
+      	continue;
+      }
+
+      $extra_field = array(
+      	'configurable' => TRUE,
+        'entity_type' => $target_type,
+        'bundle' => $target_allowed_bundle,
+        'property_name' => $target_property_name,
+        'property_label' => $target_extra_property['label'],
+        'weight' => 0,
+        'parent_field_name' => $field['field_name'],
+      );
+
+      $extra_field['label'] = $target_property_name;
+      $extra_field['display']['default'] = array(
+        'weight' => 0,
+        'visible' => FALSE,
+
+      );
+      if ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED) {
+          $extra_field['label'] = t('Referenced @type_label from @field_label: All: @bundle: @label', array('@label' => $target_extra_property['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@bundle' => $target_allowed_bundle));
+          $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$target_allowed_bundle.':all' . ':' . $target_property_name] = $extra_field;
+      }
+      elseif ($field['cardinality'] > 1) {
+        foreach (range(0, $field['cardinality'] - 1) as $delta) {
+            $extra_field['delta'] = $delta;
+            $extra_field['label'] = t('Referenced @type_label from @field_label: @delta: @bundle: @label', array('@label' => $target_extra_property['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@delta' => $delta, '@bundle' => $target_allowed_bundle));
+            $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$target_allowed_bundle . ':' . $delta . ':' . $target_property_name] = $extra_field;
+        }
+      }
+      else {
+        $extra_field['label'] = t('Referenced @type_label from @field_label: @bundle: @label', array('@label' => $target_extra_property['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@bundle' => $target_allowed_bundle));
+        $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$target_allowed_bundle . ':' . $target_property_name] = $extra_field;
+      }
+    }
+
+    foreach (field_info_instances($target_type, $target_allowed_bundle) as $target_field_name => $target_field) {
+      // Do not allow to display inline field when the field is an enable IED entityreference,
+      // and entity type and bundle referenced are the same of the parent entity type.
+      if ($target_field_name == $field['field_name'] &&
+          $target_type == $entity_type &&
+          in_array($bundle_name, $target_allowed_bundles)) {
+        // Skip this field.
+      	continue;
+      }
+      if ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED) {
+        $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$target_allowed_bundle.':all' . ':' . $target_field_name] = array(
+          'label' => t('Referenced @type_label from @field_label: All: @bundle: @label', array('@label' => $target_field['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@bundle' => $target_allowed_bundle)),
+          'description' => t('Field from a referenced @type_label.', array('@type_label' => $target_entity_type_label)),
+          'weight' => $target_field['widget']['weight'],
+          'configurable' => $configurable,
+          'entity_type' => $target_type,
+          'bundle' => $target_allowed_bundle,
+          'field_name' => $target_field_name,
+          'field_label' => $target_field['label'],
+          'parent_field_name' => $field['field_name'],
+        );
+      }
+      elseif ($field['cardinality'] > 1) {
+        foreach (range(0, $field['cardinality'] - 1) as $delta) {
+          	$extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$target_allowed_bundle . ':' . $delta . ':' . $target_field_name] = array(
+              'label' => t('Referenced @type_label from @field_label: @delta: @bundle: @label', array('@label' => $target_field['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@delta' => $delta, '@bundle' => $target_allowed_bundle)),
+              'description' => t('Field from a referenced @type_label.', array('@type_label' => $target_entity_type_label)),
+              'weight' => $target_field['widget']['weight'],
+              'configurable' => $configurable,
+              'entity_type' => $target_type,
+              'bundle' => $target_allowed_bundle,
+          	  'field_name' => $target_field_name,
+          	  'field_label' => $target_field['label'],
+          	  'parent_field_name' => $field['field_name'],
+          	  'delta' => $delta,
+          	);
+        }
+      }
+      else {
+        $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$target_allowed_bundle . ':' . $target_field_name] = array(
+          'label' => t('Referenced @type_label from @field_label: @bundle: @label', array('@label' => $target_field['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@bundle' => $target_allowed_bundle)),
+          'description' => t('Field from a referenced @type_label.', array('@type_label' => $target_entity_type_label)),
+          'weight' => $target_field['widget']['weight'],
+          'configurable' => $configurable,
+          'entity_type' => $target_type,
+          'bundle' => $target_allowed_bundle,
+          'field_name' => $target_field_name,
+          'field_label' => $target_field['label'],
+          'parent_field_name' => $field['field_name'],
+        );
+      }
+    }
+  }
 }
 
 /**
@@ -392,7 +413,7 @@ function inline_entity_display_entity_view($entity, $entity_type, $view_mode, $l
  */
 function ied_entity_process_referenced_extra_field_multiple($entity, $entity_type, $view_mode, $langcode, $field, $referenced_entities) {
   list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
-
+  // Get the entity type referenced by this field.
   $referenced_entity_type = inline_entity_display_get_field_target_type($field);
 
   foreach ($referenced_entities as $delta => $referenced_entity) {
@@ -513,7 +534,7 @@ function ied_entity_process_referenced_extra_field_multiple($entity, $entity_typ
           );
         }
         elseif (!empty($referenced_entity_extra_field['field_name'])) {
-          // Content key is {$target_type:$entity_target_allowed_bundle:$delta:$target_field_name}.
+          // Content key is {$target_type:$target_allowed_bundle:$delta:$target_field_name}.
         	$entity->content[$content_key] = field_view_field($referenced_entity_extra_field['entity_type'], $referenced_entity, $referenced_entity_extra_field['field_name'], $reference_view_mode, $langcode);
         	$entity->content[$content_key] += array(
         	  '#ied_attributes' => array(
@@ -554,6 +575,7 @@ function ied_entity_process_referenced_extra_field_multiple($entity, $entity_typ
  */
 function ied_entity_process_referenced_extra_field($entity, $entity_type, $view_mode, $langcode, $field, $referenced_entity) {
   list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
+  // Get the entity type referenced by this field.
   $referenced_entity_type = inline_entity_display_get_field_target_type($field);
   list($referenced_entity_id,
        $referenced_entity_vid,
@@ -723,6 +745,7 @@ function inline_entity_display_entity_info_alter(&$entity_info) {
       continue;
     }
     $instance['settings'] = $field_data['settings'];
+    // Get the entity type referenced by this field.
     $target_type = inline_entity_display_get_field_target_type($instance);
 
     if (!empty($entity_info[$entity_type]['view modes'])) {
@@ -787,7 +810,7 @@ function inline_entity_display_get_field_allowed_bundles($field, $entity_info) {
   	$allowed_bundles = array($field['field_name']);
   }
   // If no bundles are specified, use all bundles of this entity type.
-  if (empty($entity_target_allowed_bundles)) {
+  if (empty($allowed_bundles)) {
     $allowed_bundles = array_keys($entity_info['bundles']);
   }
 
