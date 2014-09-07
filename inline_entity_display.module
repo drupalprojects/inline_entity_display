@@ -12,8 +12,10 @@ function inline_entity_display_field_extra_fields() {
   // We will store on demand the entity info in this array.
   $infos = array();
 
+  $fields = inline_entity_display_get_enabled_reference_fields();
+
   // Loop through the product reference fields.
-  foreach (inline_entity_display_info_fields('entityreference') as $field_name => $field) {
+  foreach ($fields as $field_name => $field) {
 
     foreach ($field['bundles'] as $entity_type => $bundles) {
 
@@ -28,7 +30,7 @@ function inline_entity_display_field_extra_fields() {
         }
 
         $extra_fields = array();
-        $target_type = $field['settings']['target_type'];
+        $target_type = inline_entity_display_get_field_target_type($field);
 
         // Get entity info.
         if (empty($infos[$target_type])) {
@@ -41,12 +43,7 @@ function inline_entity_display_field_extra_fields() {
         }
 
         // Build a list of entity bundles that may be referenced.
-        $entity_target_allowed_bundles = array_filter($field['settings']['handler_settings']['target_bundles']);
-
-        // If no product types are specified, use all product types.
-        if (empty($entity_target_allowed_bundles)) {
-          $entity_target_allowed_bundles = array_keys($infos[$target_type]['bundles']);
-        }
+        $entity_target_allowed_bundles = inline_entity_display_get_field_allowed_bundles($field, $infos[$target_type]);
 
         // Retrieve the target entity type label
         $target_entity_type_label = $infos[$target_type]['label'];
@@ -56,14 +53,14 @@ function inline_entity_display_field_extra_fields() {
           $disabled = FALSE;
           $properties_name = array();
           foreach ($properties[$target_type] as $target_entity_property_name => $target_entity_extra_property) {
-            if ((empty($target_entity_extra_property['type']) && !in_array($target_entity_property_name, array('title',' name'))) ||
+            if ((empty($target_entity_extra_property['type']) && !in_array($target_entity_property_name, array('title', 'name'))) ||
                 (!empty($target_entity_extra_property['type']) && $target_entity_extra_property['type'] != 'text') ||
                 (!empty($target_entity_extra_property['field']) && $target_entity_extra_property['field'] == TRUE)) {
             	continue;
             }
+
             $extra_field = array(
             	'configurable' => TRUE,
-              'disabled' => FALSE,
               'entity_type' => $target_type,
               'bundle' => $entity_target_allowed_bundle,
               'property_name' => $target_entity_property_name,
@@ -101,8 +98,8 @@ function inline_entity_display_field_extra_fields() {
             if ($target_field_name == $field['field_name'] &&
                 $target_type == $entity_type &&
                 in_array($bundle_name, $entity_target_allowed_bundles)) {
-              // Disable this field.
-            	$disabled = TRUE;
+              // Skip this field.
+            	continue;
             }
             if ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED) {
               $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$entity_target_allowed_bundle.':all' . ':' . $target_field_name] = array(
@@ -110,7 +107,6 @@ function inline_entity_display_field_extra_fields() {
                 'description' => t('Field from a referenced @type_label.', array('@type_label' => $target_entity_type_label)),
                 'weight' => $target_field['widget']['weight'],
                 'configurable' => $configurable,
-                'disabled' => $disabled,
                 'entity_type' => $target_type,
                 'bundle' => $entity_target_allowed_bundle,
                 'field_name' => $target_field_name,
@@ -125,7 +121,6 @@ function inline_entity_display_field_extra_fields() {
                     'description' => t('Field from a referenced @type_label.', array('@type_label' => $target_entity_type_label)),
                     'weight' => $target_field['widget']['weight'],
                     'configurable' => $configurable,
-                    'disabled' => $disabled,
                     'entity_type' => $target_type,
                     'bundle' => $entity_target_allowed_bundle,
                 	  'field_name' => $target_field_name,
@@ -141,7 +136,6 @@ function inline_entity_display_field_extra_fields() {
                 'description' => t('Field from a referenced @type_label.', array('@type_label' => $target_entity_type_label)),
                 'weight' => $target_field['widget']['weight'],
                 'configurable' => $configurable,
-                'disabled' => $disabled,
                 'entity_type' => $target_type,
                 'bundle' => $entity_target_allowed_bundle,
                 'field_name' => $target_field_name,
@@ -211,7 +205,7 @@ function inline_entity_display_form_field_ui_display_overview_form_alter(&$form,
   $bundle_settings = field_bundle_settings($entity_type, $bundle);
 
   // Loop over the extra fields defined by this module for this
-  // entity to set help text and make sure any extra field derived from product
+  // entity to set help text and make sure any extra field derived from referenced entities
   // fields to be hidden by default.
   $extra_fields = inline_entity_display_field_extra_fields();
   $infos = entity_get_info();
@@ -223,13 +217,7 @@ function inline_entity_display_form_field_ui_display_overview_form_alter(&$form,
       if (!empty($infos[$field_entity_type]['bundles'][$field_bundle]['admin']['real path'])) {
       	$path_to_bundle = $infos[$field_entity_type]['bundles'][$field_bundle]['admin']['real path'];
       }
-      if ($field['disabled'] == TRUE) {
-      	$form['fields'][$field_name]['format']['type']['#disabled'] = TRUE;
-      	$form['fields'][$field_name]['weight']['#default_value'] = 9999;
-        $form['fields'][$field_name]['format']['type']['#default_value'] = 'hidden';
-      	$form['fields'][$field_name]['format']['type']['#description'] = t('The visibility of this field is disabled because of the recursion with inline display fields');
-      	continue;
-      }
+
       if (isset($field['property_name'])) {
         $form['fields'][$field_name]['format']['type']['#description'] = t('This property is provided by IED for referenced entity. (there is no label).');
 
@@ -310,7 +298,7 @@ function inline_entity_display_form_field_ui_field_edit_form_alter(&$form, &$for
   $instance = $form['#instance'];
 
   // If the field is of type entityreference:
-  if ($form['#field']['module'] == 'entityreference') {
+  if (in_array($form['#field']['module'], array('entityreference', 'field_collection'))) {
     // Get the current instance's attribute settings for use as default values.
     $ied_settings = inline_entity_display_field_instance_attribute_settings($instance);
 
@@ -345,9 +333,11 @@ function inline_entity_display_entity_view($entity, $entity_type, $view_mode, $l
   // this entity has a entity reference field instance attached to it.
   $wrapper = NULL;
 
+  $fields = inline_entity_display_get_enabled_reference_fields();
+
   // Loop through entity reference fields to see if any exist on this entity
   // bundle.
-  foreach (inline_entity_display_info_fields('entityreference', $entity_type) as $field_name => $field) {
+  foreach ($fields as $field_name => $field) {
     // Load the instances array only if the entity has entity reference fields.
     if (empty($instances)) {
       $instances = field_info_instances($entity_type, $bundle);
@@ -402,12 +392,14 @@ function inline_entity_display_entity_view($entity, $entity_type, $view_mode, $l
  */
 function ied_entity_process_referenced_extra_field_multiple($entity, $entity_type, $view_mode, $langcode, $field, $referenced_entities) {
   list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
-  $referenced_entity_type = $field['settings']['target_type'];
+
+  $referenced_entity_type = inline_entity_display_get_field_target_type($field);
+
   foreach ($referenced_entities as $delta => $referenced_entity) {
     list($referenced_entity_id,
          $referenced_entity_vid,
          $referenced_entity_bundle) = entity_extract_ids($referenced_entity_type, $referenced_entity);
-  	// Add the display context for these field to the product.
+  	// Add the display context for these field to the entity.
     $referenced_entity->display_context = array(
       'entity_type' => $entity_type,
       'entity_id' => $id,
@@ -562,12 +554,12 @@ function ied_entity_process_referenced_extra_field_multiple($entity, $entity_typ
  */
 function ied_entity_process_referenced_extra_field($entity, $entity_type, $view_mode, $langcode, $field, $referenced_entity) {
   list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
-  $referenced_entity_type = $field['settings']['target_type'];
+  $referenced_entity_type = inline_entity_display_get_field_target_type($field);
   list($referenced_entity_id,
        $referenced_entity_vid,
        $referenced_entity_bundle) = entity_extract_ids($referenced_entity_type, $referenced_entity);
 
-	// Add the display context for these field to the product.
+	// Add the display context for these field to the entity.
   $referenced_entity->display_context = array(
     'entity_type' => $entity_type,
     'entity_id' => $id,
@@ -705,7 +697,7 @@ function inline_entity_display_info_fields($field_type, $entity_type = NULL) {
 /**
  * Implements hook_entity_info_alter().
  *
- * Adds the line item and the product display-specific view modes to the product.
+ * Add the context view mode for field rendered from referenced entities (Entity type: View mode).
  */
 function inline_entity_display_entity_info_alter(&$entity_info) {
   // Query the field tables directly to avoid creating a loop in the Field API:
@@ -714,10 +706,11 @@ function inline_entity_display_entity_info_alter(&$entity_info) {
   $query = db_select('field_config_instance', 'fci', array('fetch' => PDO::FETCH_ASSOC));
   $query->join('field_config', 'fc', 'fc.id = fci.field_id');
   $query->fields('fci', array('entity_type'));
+  $query->fields('fc', array('type'));
   $query->fields('fci', array('data'));
   $query->addField('fc', 'data', 'field_data');
   $query->fields('fci', array('id'));
-  $query->condition('fc.type', 'entityreference');
+  $query->condition('fc.type', inline_entity_display_get_compatible_field_types());
   $query->condition('fc.deleted', 0);
   $query->distinct();
   $results = $query->execute()->fetchAllAssoc('id');
@@ -729,7 +722,9 @@ function inline_entity_display_entity_info_alter(&$entity_info) {
     if (empty($instance_data['ied_settings']['display_fields'])) {
       continue;
     }
-    $target_type = $field_data['settings']['target_type'];
+    $instance['settings'] = $field_data['settings'];
+    $target_type = inline_entity_display_get_field_target_type($instance);
+
     if (!empty($entity_info[$entity_type]['view modes'])) {
       foreach ($entity_info[$entity_type]['view modes'] as $view_mode => $view_mode_info) {
         $entity_info[$target_type]['view modes'][$entity_type . '_' . $view_mode] = array(
@@ -741,4 +736,60 @@ function inline_entity_display_entity_info_alter(&$entity_info) {
       }
     }
   }
+}
+
+/**
+ * Return a list of reference field type compatible with this module.
+ */
+function inline_entity_display_get_compatible_field_types() {
+	return array(
+		'entityreference',
+	  'field_collection',
+	);
+}
+
+/**
+ * Get the compatible fields.
+ */
+function inline_entity_display_get_enabled_reference_fields() {
+	$types = inline_entity_display_get_compatible_field_types();
+	$fields = array();
+	foreach ($types as $type) {
+	  $fields += inline_entity_display_info_fields($type);
+	}
+	return $fields;
+}
+
+/**
+ * Get the entity type referenced by this field.
+ */
+function inline_entity_display_get_field_target_type($field) {
+  if (isset($field['settings']['target_type'])) {
+    return $field['settings']['target_type'];
+  }
+  else if ($field['type'] == 'field_collection') {
+    return 'field_collection_item';
+  }
+  return NULL;
+}
+
+/**
+ * Get the list of allowed bundles for a compatible reference field.
+ */
+function inline_entity_display_get_field_allowed_bundles($field, $entity_info) {
+  $allowed_bundles = array();
+  if (isset($field['settings']['handler_settings'])) {
+    // Entity reference
+    $allowed_bundles = array_filter($field['settings']['handler_settings']['target_bundles']);
+  }
+  else {
+    // Field collection
+  	$allowed_bundles = array($field['field_name']);
+  }
+  // If no bundles are specified, use all bundles of this entity type.
+  if (empty($entity_target_allowed_bundles)) {
+    $allowed_bundles = array_keys($entity_info['bundles']);
+  }
+
+  return $allowed_bundles;
 }
