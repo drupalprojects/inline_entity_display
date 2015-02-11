@@ -15,7 +15,7 @@ function inline_entity_display_field_extra_fields() {
   $fields = inline_entity_display_get_enabled_reference_fields();
 
   // Loop through the product reference fields.
-  foreach ($fields as $field) {
+  foreach ($fields as $field_name => $field) {
     foreach ($field['bundles'] as $entity_type => $bundles) {
       foreach ($bundles as $bundle_name) {
         // Get the instance settings for the field on this entity bundle.
@@ -31,7 +31,7 @@ function inline_entity_display_field_extra_fields() {
 }
 
 /**
- * This function populate the extra fields of a bundle with the referenced entities fieds and text properties.
+ * This function populate the extra fields of an entity reference field instance on a given entity type bundle.
  *
  * @param $extra
  *   The extra array to populate with extra fields that contains the extra fields.
@@ -79,7 +79,7 @@ function _ied_entity_bundle_referencefield_extra_fields(&$extra, &$properties, &
     $disabled = FALSE;
     $properties_name = array();
     foreach ($properties[$target_type] as $target_property_name => $target_extra_property) {
-      if ((empty($target_extra_property['type']) && !in_array($target_property_name, array('title', 'name'))) ||
+      if ((empty($target_extra_property['type']) && !in_array($target_property_name, array('title', 'name', 'mail'))) ||
           (!empty($target_extra_property['type']) && $target_extra_property['type'] != 'text') ||
           (!empty($target_extra_property['field']) && $target_extra_property['field'] == TRUE)) {
       	continue;
@@ -99,7 +99,6 @@ function _ied_entity_bundle_referencefield_extra_fields(&$extra, &$properties, &
       $extra_field['display']['default'] = array(
         'weight' => 0,
         'visible' => FALSE,
-
       );
       if ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED) {
           $extra_field['label'] = t('Referenced @type_label from @field_label: All: @bundle: @label', array('@label' => $target_extra_property['label'], '@field_label' => $instance_settings['label'], '@type_label' => $target_entity_type_label, '@bundle' => $target_allowed_bundle));
@@ -117,7 +116,6 @@ function _ied_entity_bundle_referencefield_extra_fields(&$extra, &$properties, &
         $extra[$entity_type][$bundle_name]['display'][$target_type . ':'.$target_allowed_bundle . ':' . $target_property_name] = $extra_field;
       }
     }
-
     foreach (field_info_instances($target_type, $target_allowed_bundle) as $target_field_name => $target_field) {
       // Do not allow to display inline field when the field is an enable IED entityreference,
       // and entity type and bundle referenced are the same of the parent entity type.
@@ -192,7 +190,6 @@ function inline_entity_display_field_extra_fields_display_alter(&$displays, $con
   if (empty($extra_fields[$context['entity_type']][$context['bundle']])) {
     return;
   }
-
   foreach ($extra_fields[$context['entity_type']][$context['bundle']] as $key => $values) {
     foreach (array_keys($values) as $extra_field_name) {
       // If the current extra field is represented in the $displays array...
