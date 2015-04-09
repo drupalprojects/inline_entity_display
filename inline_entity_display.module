@@ -468,7 +468,12 @@ function ied_entity_process_referenced_extra_field_multiple($entity, $entity_typ
           $prop_attributes = array(
             'class' => array(
               'ied-extra-field',
-              'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name']
+              'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name'],
+        	    'ied-entity-' . $referenced_entity_id,
+        	    'ied-entity-type-' . $referenced_entity_type,
+        	    'ied-entity-delta-' . $delta,
+        	    'ied-prop-name-' . $referenced_entity_extra_field['property_name'],
+        	    'ied-parent-field-name-' . $field['field_name'],
             ),
       	    'data-ied-entity' => $referenced_entity_id,
       	    'data-ied-entity-type' => $referenced_entity_type,
@@ -498,7 +503,12 @@ function ied_entity_process_referenced_extra_field_multiple($entity, $entity_typ
         	  ),
         	  '#ied_classes' => array(
               'ied-extra-field',
-              'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['field_name']
+              'ied-extra-field-' . $referenced_entity_bundle. '-' .$referenced_entity_extra_field['field_name'],
+      	      'ied-entity-' . $referenced_entity_id,
+      	      'ied-entity-type-' . $referenced_entity_type,
+      	      'ied-entity-delta-' . $delta,
+      	      'ied-field-name-' . $referenced_entity_extra_field['field_name'],
+      	      'ied-parent-field-name-' . $field['field_name'],
         	  ),
         	);
         }
@@ -512,7 +522,12 @@ function ied_entity_process_referenced_extra_field_multiple($entity, $entity_typ
           $prop_attributes = array(
             'class' => array(
               'ied-extra-field',
-              'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name']
+              'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name'],
+        	    'ied-entity-' . $referenced_entity_id,
+        	    'ied-entity-type-' . $referenced_entity_type,
+        	    'ied-entity-delta-' . $delta,
+        	    'ied-prop-name-' . $referenced_entity_extra_field['property_name'],
+        	    'ied-parent-field-name-' . $field['field_name'],
             ),
       	    'data-ied-entity' => $referenced_entity_id,
       	    'data-ied-entity-type' => $referenced_entity_type,
@@ -543,7 +558,12 @@ function ied_entity_process_referenced_extra_field_multiple($entity, $entity_typ
         	  ),
         	  '#ied_classes' => array(
               'ied-extra-field',
-              'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['field_name']
+              'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['field_name'],
+        	    'ied-entity-' . $referenced_entity_id,
+        	    'ied-entity-type-' . $referenced_entity_type,
+        	    'ied-entity-delta-' . $delta,
+        	    'ied-field-name-' . $referenced_entity_extra_field['field_name'],
+        	    'ied-parent-field-name-' . $field['field_name'],
         	  ),
         	);
         }
@@ -628,7 +648,12 @@ function ied_entity_process_referenced_extra_field($entity, $entity_type, $view_
       $prop_attributes = array(
         'class' => array(
           'ied-extra-field',
-          'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name']
+          'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['property_name'],
+    	    'ied-entity-' . $referenced_entity_id,
+    	    'ied-entity-type-' . $referenced_entity_type,
+    	    'ied-entity-delta-' . 0,
+    	    'ied-prop-name-' . $referenced_entity_extra_field['property_name'],
+    	    'ied-parent-field-name-' . $field['field_name'],
         ),
   	    'data-ied-entity' => $referenced_entity_id,
   	    'data-ied-entity-type' => $referenced_entity_type,
@@ -658,7 +683,12 @@ function ied_entity_process_referenced_extra_field($entity, $entity_type, $view_
     	  ),
     	  '#ied_classes' => array(
           'ied-extra-field',
-          'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['field_name']
+          'ied-extra-field-' .$referenced_entity_bundle. '-' .$referenced_entity_extra_field['field_name'],
+    	    'ied-entity-' . $referenced_entity_id,
+    	    'ied-entity-type-' . $referenced_entity_type,
+    	    'ied-entity-delta-' . 0,
+    	    'ied-field-name-' . $referenced_entity_extra_field['field_name'],
+    	    'ied-parent-field-name-' . $field['field_name'],
     	  ),
     	);
     }
